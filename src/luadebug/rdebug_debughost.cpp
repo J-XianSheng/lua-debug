@@ -4,10 +4,12 @@
 
 #include "luadbg/bee_module.h"
 #include "rdebug_lua.h"
-#include "rdebug_putenv.h"
 
-#if defined(_WIN32) && !defined(LUADBG_DISABLE)
-#    include <bee/platform/win/unicode.h>
+#if defined(_WIN32)
+#    include "rdebug_win32.h"
+#    if !defined(LUADBG_DISABLE)
+#        include <bee/win/unicode.h>
+#    endif
 #endif
 
 static int DEBUG_HOST   = 0;
@@ -86,8 +88,7 @@ namespace luadebug::debughost {
     static void push_errmsg(lua_State* hL, luadbg_State* L) {
         if (luadbg_type(L, -1) != LUA_TSTRING) {
             lua_pushstring(hL, "Unknown Error");
-        }
-        else {
+        } else {
             size_t sz       = 0;
             const char* err = luadbg_tolstring(L, -1, &sz);
             lua_pushlstring(hL, err, sz);
@@ -124,8 +125,7 @@ namespace luadebug::debughost {
         if (preprocessor) {
             // TODO: convert C function？
             luadbg_pushcfunction(L, (luadbg_CFunction)preprocessor);
-        }
-        else {
+        } else {
             luadbg_pushnil(L);
         }
 
@@ -169,7 +169,7 @@ namespace luadebug::debughost {
         const char* value = luaL_checkstring(hL, 2);
 #if defined(_WIN32)
         lua_pushfstring(hL, "%s=%s", name, value);
-        luadebug::putenv(lua_tostring(hL, -1));
+        luadebug::win32::putenv(lua_tostring(hL, -1));
 #else
         ::setenv(name, value, 1);
 #endif

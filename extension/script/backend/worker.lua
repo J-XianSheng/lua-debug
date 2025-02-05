@@ -12,6 +12,7 @@ local stdio = require 'luadebug.stdio'
 local thread = require 'bee.thread'
 local fs = require 'backend.worker.filesystem'
 local log = require 'common.log'
+local channel = require "bee.channel"
 
 local initialized = false
 local suspend = false
@@ -35,13 +36,12 @@ local CMD = {}
 local WorkerIdent = tostring(thread.id)
 local WorkerChannel = ('DbgWorker(%s)'):format(WorkerIdent)
 
-thread.newchannel(WorkerChannel)
-local masterThread = thread.channel 'DbgMaster'
-local workerThread = thread.channel(WorkerChannel)
+local masterThread = channel.query 'DbgMaster'
+local workerThread = channel.create(WorkerChannel)
 
 local function workerThreadUpdate(timeout)
     while true do
-        local ok, msg = workerThread:pop(timeout)
+        local ok, msg = workerThread:pop()
         if not ok then
             break
         end
@@ -54,6 +54,10 @@ local function workerThreadUpdate(timeout)
         if not ok then
             log.error("ERROR:"..err)
         end
+    end
+    if timeout then
+        --TODO
+        thread.sleep(timeout)
     end
 end
 
@@ -544,8 +548,11 @@ function CMD.setSearchPath(pkg)
         else
             value = fs.nativepath(value)
         end
-        local visitor = rdebug.field(rdebug.field(rdebug._G, "package"), name)
-        if not rdebug.assign(visitor, value) then
+        local visitor = rdebug.field(rdebug._G, "package")
+        if visitor == nil then
+            return
+        end
+        if not rdebug.assign_field(visitor, name, value) then
             return
         end
     end
@@ -574,7 +581,7 @@ local function runLoop(reason, level)
     skipFrame = level or 0
 
     while true do
-        workerThreadUpdate(0.01)
+        workerThreadUpdate(10)
         if state ~= 'stopped' then
             break
         end
@@ -601,7 +608,7 @@ end
 
 local function debuggeeReady()
     while suspend do
-        workerThreadUpdate(0.01)
+        workerThreadUpdate(10)
     end
     if initialized then
         return true
@@ -705,21 +712,20 @@ local ERREVENT_ERRERR <const> = 0x05
 local ERREVENT_PANIC <const> = 0x10
 
 local function GlobalFunction(name)
-    return rdebug.value(rdebug.fieldv(rdebug._G, name))
+    return rdebug.fieldv(rdebug._G, name)
 end
 
-local function getExceptionType(errcode)
+local function getExceptionType(errcode, skip)
     errcode = errcode & 0xF
     if errcode == ERREVENT_ERRRUN then
-        if rdebug.getinfo(0, "Slf", info) then
+        if rdebug.getinfo(skip, "Slf", info) then
             if info.what ~= 'C' then
                 return "runtime"
             end
-            local raisefunc = rdebug.value(info.func)
-            if raisefunc == GlobalFunction "assert" then
+            if rdebug.equal(info.func, GlobalFunction "assert") then
                 return "assert"
             end
-            if raisefunc == GlobalFunction "error" then
+            if rdebug.equal(info.func, GlobalFunction "error") then
                 return "error"
             end
         end
@@ -735,13 +741,13 @@ local function getExceptionType(errcode)
     end
 end
 
-local function getExceptionCaught(errcode)
+local function getExceptionCaught(errcode, skip)
     if errcode & ERREVENT_PANIC ~= 0 then
         return "panic"
     end
     local pcall = GlobalFunction 'pcall'
     local xpcall = GlobalFunction 'xpcall'
-    local level = 0
+    local level = skip
     while true do
         if not rdebug.getinfo(level, "f", info) then
             break
@@ -749,11 +755,10 @@ local function getExceptionCaught(errcode)
         if level >= 100 then
             return 'native'
         end
-        local f = rdebug.value(info.func)
-        if f == pcall then
+        if rdebug.equal(info.func, pcall) then
             return 'lua'
         end
-        if f == xpcall then
+        if rdebug.equal(info.func, xpcall) then
             return 'lua'
         end
         level = level + 1
@@ -761,10 +766,10 @@ local function getExceptionCaught(errcode)
     return 'native'
 end
 
-local function getExceptionFlags(errcode)
+local function getExceptionFlags(errcode, skip)
     return {
-        getExceptionType(errcode),
-        getExceptionCaught(errcode),
+        getExceptionType(errcode, skip),
+        getExceptionCaught(errcode, skip),
     }
 end
 
@@ -790,13 +795,14 @@ local function runException(flags, errobj)
     }, level)
 end
 
-function event.exception(errobj, errcode)
+function event.exception(errobj, errcode, level)
     if not debuggeeReady() then return end
     if errcode == nil or errcode == -1 then
         --TODO:暂时兼容旧版本
         errcode = ERREVENT_ERRRUN
     end
-    runException(getExceptionFlags(errcode), errobj)
+    local skip = level or 0
+    runException(getExceptionFlags(errcode, skip), errobj)
 end
 
 function event.thread(co, type)

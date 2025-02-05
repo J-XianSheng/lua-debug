@@ -1,9 +1,26 @@
 local lm = require "luamake"
 
+if lm.os == "windows" then
+    lm:source_set "source_inject" {
+        bindir = "publish/bin",
+        includes = {
+            "3rd/bee.lua",
+            "3rd/bee.lua/3rd/lua",
+            "3rd/wow64ext/src",
+        },
+        sources = {
+            "src/process_inject/windows/*.cpp",
+            "3rd/wow64ext/src/wow64ext.cpp",
+        },
+        links = "advapi32",
+    }
+end
+
 lm:executable "lua-debug" {
     bindir = "publish/bin/",
     deps = "source_bootstrap",
     windows = {
+        deps = "source_inject",
         sources = {
             "compile/windows/lua-debug.rc"
         }
@@ -16,6 +33,7 @@ lm:executable "lua-debug" {
     },
     linux = {
         crt = "static",
+        ldflags = "-rdynamic"
     },
     netbsd = {
         crt = "static",

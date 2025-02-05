@@ -2,6 +2,7 @@ local lm = require "luamake"
 
 lm.arch = "x86"
 lm.runtime_platform = "win32-ia32"
+
 require "compile.windows.runtime"
 require "compile.common.run_luamake"
 
@@ -15,30 +16,13 @@ lm:build "x86_64" {
     },
 }
 
-lm:import "3rd/bee.lua/make.lua"
+lm:import "compile/common/bee.lua"
 require "compile.common.lua-debug"
-
-lm:lua_dll 'inject' {
-    bindir = "publish/bin",
-    defines = "BEE_INLINE",
-    includes = {
-        "3rd/bee.lua",
-        "3rd/bee.lua/3rd/lua",
-        "3rd/wow64ext/src",
-    },
-    sources = {
-        "src/process_inject/windows/*.cpp",
-        "3rd/wow64ext/src/wow64ext.cpp",
-        "3rd/bee.lua/bee/platform/win/unicode_win.cpp",
-    },
-    links = "advapi32",
-}
 
 lm:default {
     "common",
     lm.mode ~= "debug" and "copy_vcredist",
     "lua-debug",
-    "inject",
     "launcher",
     "runtime",
     "x86_64",

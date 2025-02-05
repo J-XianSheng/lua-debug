@@ -40,7 +40,7 @@ inline void lua_getglobal(lua_State* L, const char* s) {
 inline const char* luaL_tolstring(lua_State* L, int idx, size_t* len) {
     if (!luaL_callmeta(L, idx, "__tostring")) {
         int t = lua_type(L, idx), tt = 0;
-        char const* name = NULL;
+        const char* name = NULL;
         switch (t) {
         case LUA_TNIL:
             lua_pushliteral(L, "nil");
@@ -63,8 +63,7 @@ inline const char* luaL_tolstring(lua_State* L, int idx, size_t* len) {
                 lua_replace(L, -2);
             break;
         }
-    }
-    else {
+    } else {
         if (!lua_isstring(L, -1))
             luaL_error(L, "'__tostring' must return a string");
     }
@@ -100,7 +99,7 @@ namespace lua {
 #if LUA_VERSION_NUM == 501 && !defined(LUAJIT_VERSION)
     const char* lua_getlocal(lua_State* L, const lua_Debug* ar, int n);
 #else
-    constexpr auto lua_getlocal = ::lua_getlocal;
+    inline constexpr auto lua_getlocal = ::lua_getlocal;
 #endif
 }
 

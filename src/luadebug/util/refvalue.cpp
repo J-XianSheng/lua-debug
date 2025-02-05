@@ -77,8 +77,7 @@ namespace luadebug::refvalue {
         if (lua_getupvalue(hL, -1, v.n)) {
             lua_replace(hL, -2);
             return lua_type(hL, -1);
-        }
-        else {
+        } else {
             lua_pop(hL, 1);
             return LUA_TNONE;
         }
@@ -119,8 +118,7 @@ namespace luadebug::refvalue {
         if (lua_getmetatable(hL, -1)) {
             lua_replace(hL, -2);
             return lua_type(hL, -1);
-        }
-        else {
+        } else {
             lua_pop(hL, 1);
             return LUA_TNONE;
         }
@@ -314,7 +312,7 @@ namespace luadebug::refvalue {
     bool assign(value* v, lua_State* hL) {
         int top = lua_gettop(hL);
         bool ok = visit([hL, v](auto&& arg) { return assign(arg, hL, v + 1); }, *v);
-        lua_settop(hL, top - 1);
+        lua_settop(hL, top - 2);
         return ok;
     }
 
